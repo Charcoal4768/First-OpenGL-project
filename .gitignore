@@ -18,6 +18,6 @@
 build/
 bin/
 out/
-glad.h
-glad.c
-khrplatform.h
+/glad.h
+/glad.c
+/include/KHR/khrplatform.h
