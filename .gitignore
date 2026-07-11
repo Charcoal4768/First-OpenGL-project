@@ -20,4 +20,4 @@ bin/
 out/
 /glad.h
 /glad.c
-/include/KHR/khrplatform.h
+/khrplatform.h
