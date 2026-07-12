@@ -3,12 +3,39 @@
 #include <algorithm>
 #include <iostream>
 
+ScissorRect IntersectRects(const ScissorRect& a, const ScissorRect& b){
+    GLint x1 = std::max(a.x, b.x);
+    GLint y1 = std::max(a.y, b.y);
+    GLint x2 = std::min(a.x + a.w, b.x + b.w);
+    GLint y2 = std::min(a.y + a.h, b.y + b.h);
+
+    if (x2 < x1 || y2 < y1) {
+        return {0,0,0,0};
+    }
+    return {x1, y1, x2 - x1, y2 - y1};
+}
+
 UIElement* UIManager::GetElement(int id) const {
     if (id >= 0 && id < registry.size()){
         return registry[id];
     }
     return nullptr;
 }
+
+// void UIManager::Init(){
+//     registry.reserve(defaultCapacity);
+//     elementBucket.reserve(defaultCapacity);
+// }
+
+// void UIManager::UpdateRegistry(){
+//     //if items in elementBucket, move to
+//     //registry and then clear out elementBucket at the end
+//     //how to map out registry
+//     //parents and children should be in "groups"
+//     //where the parents leads and children trail behind
+//     if (elementBucket.empty()) return;
+    
+// }
 
 void UIManager::EditElement(int id, const ElementGeometry& props, bool dirtyChain){
     if (id >= 0 && id < registry.size() && registry[id] != nullptr){
@@ -25,7 +52,8 @@ void UIManager::EditElement(int id, const ElementGeometry& props, bool dirtyChai
         dataTables.b[id]       = props.b;
         dataTables.a[id]       = props.a;
 
-        if (sizeChanged && el->parentId > -1) {
+        // ONLY flag the parent chain dirty if explicitly requested!
+        if (dirtyChain && sizeChanged && el->parentId > -1) {
             if (registry[el->parentId]) {
                 registry[el->parentId]->isDirty = true;
             }
@@ -56,7 +84,6 @@ void UIManager::AddElement(UIElement* uI) {
     uI->id = static_cast<int>(registry.size());
     registry.push_back(uI);
 
-    // Absolutely garbage data
     dataTables.localX.push_back(0.0f);
     dataTables.localY.push_back(0.0f);
     dataTables.widths.push_back(100.0f);
@@ -70,6 +97,47 @@ void UIManager::AddElement(UIElement* uI) {
     dataTables.absoluteY.push_back(0.0f);
 }
 
+void UIManager::RebuildHierarchy(){
+    if (!hirearchyDirty) return;
+
+    displayList.clear();
+
+    int rootId = 0;
+    for (UIElement *element : registry){
+        int elementparentId = element->parentId;
+        if(elementparentId == -1) rootId = element -> id;
+    }
+    if (!registry.empty() && registry[rootId]){
+        CompileDisplayList(0);
+    }
+
+    hirearchyDirty = false;
+    
+}
+
+void UIManager::CompileDisplayList(int elementId){
+    UIElement* el = registry[elementId];
+    if (!el) return;
+
+    bool useScissor = el->clipChildren;
+
+    if(useScissor) {
+        displayList.push_back({RenderOpType::PushScissor, elementId});
+    }
+
+    displayList.push_back({RenderOpType::DrawElement, elementId});
+
+    for (int childId : el->childIds){
+        CompileDisplayList(childId);
+    }
+
+    if (useScissor){
+        displayList.push_back({RenderOpType::PopScissor, elementId});
+    }
+    
+    
+}
+
 void UIElement::AddChild(UIElement* child) {
     if (!child) return;
     this->childIds.push_back(child->id);
@@ -77,7 +145,7 @@ void UIElement::AddChild(UIElement* child) {
     this->isDirty = true;
 }
 
-void UIElement::UpdateLayout(UIManager* uIManager) {
+void UIElement::UpdateLayout(UIManager *uIManager) {
     isDirty = false;
 }
 
@@ -87,6 +155,11 @@ ScreenLayoutMode UIManager::GetScreenLayoutMode() const{
 }
 
 void UIManager::StepFrame(std::array<float,2>& resolution){
+
+    if (hirearchyDirty) {
+        RebuildHierarchy();
+    }
+
     bool geometryNeedsRebuild = false;
 
     if (!registry.empty() && registry[0]) {
@@ -125,18 +198,79 @@ void UIManager::StepFrame(std::array<float,2>& resolution){
     if (geometryNeedsRebuild) {
         globalVertices.clear();
         globalIndices.clear();
+        drawCommands.clear();
 
-        for (UIElement* element : registry) {
-            if (!element) continue;
+        DrawCommand currentBatch;
+        currentBatch.indexOffset = 0;
+        currentBatch.indexCount = 0;
 
-            GeometryView view = element->Draw(*this);
-            GLuint baseVertexOffset = static_cast<GLuint>(globalVertices.size());
+        std::vector<ScissorRect> scissorRects;
 
-            globalVertices.insert(globalVertices.end(), view.verticesPtr, view.verticesPtr + view.vertexCount);
+        for (const RenderOp& op : displayList){
+            if (op.type == RenderOpType::PushScissor){
+                if (currentBatch.indexCount > 0){
+                    drawCommands.push_back(currentBatch);
+                    currentBatch.indexOffset = globalIndices.size();
+                    currentBatch.indexCount = 0;
+                }
 
-            for (size_t i = 0; i < view.indexCount; i++) {
-                globalIndices.push_back(baseVertexOffset + view.indicesPtr[i]);
+                float windowHeight = GetHeight(0);
+                float elementWdith = GetWidth(op.elementId);
+                float elementHeight = GetHeight(op.elementId);
+                float elementY = GetAbsoluteY(op.elementId);
+                float elementX = GetAbsoluteX(op.elementId);
+                ScissorRect newRect = {
+                    static_cast<GLint>(elementX),
+                    static_cast<GLint>(windowHeight - (elementY + elementHeight)),
+                    static_cast<GLsizei>(elementWdith),
+                    static_cast<GLsizei>(elementHeight),
+                };
+                
+                if (!scissorRects.empty()){
+                    newRect = IntersectRects(scissorRects.back(), newRect);
+                }
+
+                scissorRects.push_back(newRect);
+                currentBatch.useScissor = true;
+                currentBatch.scissorBox = newRect;
             }
+
+            else if (op.type == RenderOpType::PopScissor){
+                if (currentBatch.indexCount > 0){
+                    drawCommands.push_back(currentBatch);
+                    currentBatch.indexOffset = globalIndices.size();
+                    currentBatch.indexCount = 0;  
+                }
+
+                scissorRects.pop_back();
+
+                //try to use parent scissor
+                //or if no scissor Rects remain, turn off the flag
+                if (scissorRects.empty()){
+                    currentBatch.useScissor = false;
+                } else {
+                    currentBatch.useScissor = true;
+                    currentBatch.scissorBox = scissorRects.back();
+                }
+            }
+
+            else if (op.type == RenderOpType::DrawElement){
+                UIElement* element = registry[op.elementId];
+                if (element){
+                    GeometryView view = element->Draw(*this);
+                    GLuint baseVertexOffset = static_cast<GLuint>(globalVertices.size());
+
+                    globalVertices.insert(globalVertices.end(), view.verticesPtr, view.verticesPtr + view.vertexCount);
+
+                    for (size_t i = 0; i < view.indexCount; i++) {
+                        globalIndices.push_back(baseVertexOffset + view.indicesPtr[i]);
+                    }
+                    currentBatch.indexCount += view.indexCount;
+                }
+            }
+        }
+        if (currentBatch.indexCount > 0) {
+            drawCommands.push_back(currentBatch);
         }
     }
 }
@@ -145,23 +279,22 @@ Color UIManager::GetColor(int id) const {
     if (id >= 0 && id < dataTables.r.size()) {
         return { dataTables.r[id], dataTables.g[id], dataTables.b[id], dataTables.a[id] };
     }
-    return { 1.0f, 1.0f, 1.0f, 1.0f }; // default color (why not black?? racist code!)
+    return { 1.0f, 1.0f, 1.0f, 1.0f };
 }
 
 GeometryView UIRect::Draw(const UIManager& manager){
     float cachedWidth = manager.GetWidth(this->id);
     float cachedHeight = manager.GetHeight(this->id);
-    //debug, make rect say with std::cout its local and absolute coords
 
     float absX = manager.GetAbsoluteX(this->id);
     float absY = manager.GetAbsoluteY(this->id);
 
-    std::cout << "Element ID: " << this->id << ", Absolute X: " << absX << ", Absolute Y: " << absY << std::endl;
+    // std::cout << "Element ID: " << this->id << ", Absolute X: " << absX << ", Absolute Y: " << absY << std::endl;
 
     float localX = manager.GetElementProperties(this->id).x;
     float localY = manager.GetElementProperties(this->id).y;
 
-    std::cout <<", Local X: " << localX << ", Local Y: " << localY << std::endl;
+    // std::cout <<", Local X: " << localX << ", Local Y: " << localY << std::endl;
 
     Color col = manager.GetColor(this->id);
 
@@ -204,18 +337,30 @@ void VerticalContainer::UpdateLayout(UIManager* uIManager){
     }
     float selfY = uIManager->GetAbsoluteY(this->id);
     float targetX = 0, targetY = padding;
+    float childLargestWidth = 0.0f;
     ElementGeometry childData;
     
-    float myWidth = uIManager->GetWidth(this->id);
+    ElementGeometry myData = uIManager->GetElementProperties(this->id);
 
     for (int childId : childIds){
         childData = uIManager->GetElementProperties(childId);
         if (resizeChildren){
             float bigger = std::max(childData.width, childData.height);
             childData.width = childData.height = bigger;
+            uIManager->EditElement(childId, childData, false);
         }
+        childLargestWidth = std::max(childLargestWidth, childData.width);
+    }
+
+    if (fitContentWidth){
+        myData.width = childLargestWidth + 2 * padding;
+        uIManager->EditElement(this->id, myData, false);
+    }
+
+    for (int childId : childIds){
+        childData = uIManager->GetElementProperties(childId);
         if(centerHorizontally){
-            targetX = (myWidth - childData.width) * 0.5f;
+            targetX = (myData.width - childData.width) * 0.5f;
         } else{
             targetX = padding;
         }
@@ -227,5 +372,11 @@ void VerticalContainer::UpdateLayout(UIManager* uIManager){
 
         targetY += padding + childData.height;
     }
+
+    if (fitContentHeight){
+        myData.height = targetY;
+        uIManager->EditElement(this->id, myData, false);
+    }
+    
     isDirty = false;
 }

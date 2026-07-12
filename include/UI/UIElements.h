@@ -7,10 +7,6 @@
 
 class UIManager;
 
-struct DrawCommand{
-
-};
-
 struct Vertex
 {
     GLfloat pos[3];
@@ -22,6 +18,17 @@ struct RectShape{
     std::array<GLuint, 6> localIndices = {0, 1, 2, 0, 2, 3};
 };
 
+struct ScissorRect{
+    GLint x, y;
+    GLsizei w, h;
+};
+
+struct DrawCommand{
+    size_t indexOffset = 0;
+    GLsizei indexCount = 0;
+    bool useScissor = false;
+    ScissorRect scissorBox;
+};
 
 struct ElementGeometry {
     float x, y;
@@ -37,6 +44,17 @@ enum class ScreenLayoutMode {
     Mobile,   // Width < 600px
     Tablet,   // Width between 600px and 1024px
     Desktop   // Width > 1024px
+};
+
+enum class RenderOpType{
+    DrawElement,
+    PushScissor,
+    PopScissor
+};
+
+struct RenderOp {
+    RenderOpType type;
+    int elementId;
 };
 
 struct GeometryView {
@@ -66,6 +84,9 @@ struct UIStateTables {
 class UIElement {
 public:
     bool isDirty = true;
+    bool fitContentHeight = false;
+    bool fitContentWidth = false;
+    bool clipChildren = false;
 
     int id = -1;
     int parentId = -1;
@@ -81,26 +102,33 @@ public:
 
 class UIManager {
 private:
-    std::vector<UIElement*> registry;
+    std::vector<UIElement*> registry;//permanent
+    std::vector<RenderOp> displayList;
 
     UIStateTables dataTables;
 
+    bool hirearchyDirty = true;
+
     void MarkParentChainDirty(int startingId);
+    void CompileDisplayList(int elementId);
 
 public:
     std::vector<Vertex> globalVertices;
     std::vector<GLuint> globalIndices;
+    std::vector<DrawCommand> drawCommands;
 
+    int defaultCapacity = 100;
+
+    void Init();
+    void UpdateRegistry();
     void AddElement(UIElement* uI);
     void EditElement(int id, const ElementGeometry& props, bool dirtyChain);
     void SyncElementToCache(int id);
-    //first element in registry will always be the window root
-    //make it the size of resolution
-    void StepFrame(std::array<float, 2>& resolution);
+    void StepFrame(std::array<float, 2>& resolution);//first element will always be the root make it the size of resolution
+    void RebuildHierarchy();
 
     UIElement* GetElement(int id) const;
 
-    //bulk lookup for editing alot of stuff at once
     ElementGeometry GetElementProperties(int id) const;
     Color GetColor(int id) const;
     
