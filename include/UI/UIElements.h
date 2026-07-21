@@ -5,6 +5,7 @@
 #include <array>
 #include <memory>
 #include <glad/glad.h>
+#include <cassert>
 
 class UIManager;
 
@@ -165,6 +166,14 @@ public:
         dataTables.absoluteY.push_back(0.0f);
         return newID;
     }
+
+    template <typename T>
+    T& Get(int id){
+        assert(id >= 0 && id < ptrStore.size());
+        T* ptr = dynamic_cast<T*>(ptrStore[id].get());
+        assert(ptr != nullptr);
+        return *ptr;
+    }
 };
 
 class AnchorElement : public UIElement {
@@ -183,7 +192,7 @@ class VerticalContainer : public UIElement {
 private:
     RectShape drawRect;
 public:
-    float padding = 0.0f;
+    float padding = 10.0f;
     bool centerHorizontally = true;
     bool resizeChildren = false;
     float r = 0.6f, g = 0.1f, b = 0.8f;
