@@ -105,11 +105,13 @@ public:
 class UIManager {
 private:
     std::vector<std::unique_ptr<UIElement>> ptrStore;
+    std::vector<int> drawOrder;
     std::vector<RenderOp> displayList;
 
     UIStateTables dataTables;
 
     bool hirearchyDirty = true;
+    int rootId;
 
     void MarkParentChainDirty(int startingId);
     void CompileDisplayList(int elementId);
@@ -123,7 +125,7 @@ public:
 
     void Init();
     void UpdateptrStore();
-    // void AddElement(UIElement* uI);
+    void SetRoot(int id);
     void EditElement(int id, const ElementGeometry& props, bool dirtyChain);
     void SyncElementToCache(int id);
     void StepFrame(std::array<float, 2>& resolution);//first element will always be the root make it the size of resolution
@@ -131,7 +133,6 @@ public:
     void RebuildHierarchy();
 
     UIElement* GetElement(int id) const;
-
     ElementGeometry GetElementProperties(int id) const;
     Color GetColor(int id) const;
     

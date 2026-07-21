@@ -15,27 +15,12 @@ ScissorRect IntersectRects(const ScissorRect& a, const ScissorRect& b){
     return {x1, y1, x2 - x1, y2 - y1};
 }
 
-// UIElement* UIManager::GetElement(int id) const {
-//     if (id >= 0 && id < ptrStore.size()){
-//         return ptrStore[id].get();
-//     }
-//     return nullptr;
-// }
-
-// void UIManager::Init(){
-//     ptrStore.reserve(defaultCapacity);
-//     elementBucket.reserve(defaultCapacity);
-// }
-
-// void UIManager::UpdateptrStore(){
-//     //if items in elementBucket, move to
-//     //ptrStore and then clear out elementBucket at the end
-//     //how to map out ptrStore
-//     //parents and children should be in "groups"
-//     //where the parents leads and children trail behind
-//     if (elementBucket.empty()) return;
-    
-// }
+void UIManager::SetRoot(int id){
+    UIElement* ptr = ptrStore[id].get();
+    assert(ptr != nullptr);//checks if AddElement was even called for this, if it was then id automatically is valid and > -1
+    assert(ptr->parentId == -1); //root cannot have a parent
+    rootId = id;
+}
 
 void UIManager::EditElement(int id, const ElementGeometry& props, bool dirtyChain){
     if (id >= 0 && id < ptrStore.size() && ptrStore[id] != nullptr){
@@ -77,38 +62,24 @@ ElementGeometry UIManager::GetElementProperties(int id) const {
     };
 }
 
-// void UIManager::AddElement(UIElement* uI) {
-//     if (!uI) return;
-
-//     uI->id = static_cast<int>(ptrStore.size());
-//     ptrStore.push_back(uI);
-
-//     dataTables.localX.push_back(0.0f);
-//     dataTables.localY.push_back(0.0f);
-//     dataTables.widths.push_back(100.0f);
-//     dataTables.heights.push_back(100.0f);
-//     dataTables.r.push_back(1.0f);
-//     dataTables.g.push_back(1.0f);
-//     dataTables.b.push_back(1.0f);
-//     dataTables.a.push_back(1.0f);
-    
-//     dataTables.absoluteX.push_back(0.0f);
-//     dataTables.absoluteY.push_back(0.0f);
-// }
-
 void UIManager::RebuildHierarchy(){
     if (!hirearchyDirty) return;
 
     displayList.clear();
 
-    int rootId = 0;
-    for (auto& ptr : ptrStore){
-        UIElement *element = ptr.get();
-        int elementparentId = element->parentId;
-        if(elementparentId == -1) rootId = element -> id;
-    }
+    // this old method used to search its own data to find the root
+    // that felt kinda wrong so i think the dev using the framework should
+    // be setting the root with a SetRoot function
+
+    // for (auto& ptr : ptrStore){
+    //     UIElement *element = ptr.get();
+    //     int elementparentId = element->parentId;
+    //     if(elementparentId == -1) rootId = element -> id;
+    // } 
+
     if (!ptrStore.empty() && ptrStore[rootId]){
-        CompileDisplayList(0);
+        drawOrder.reserve(ptrStore.size());
+        CompileDisplayList(rootId);
     }
 
     hirearchyDirty = false;
@@ -117,6 +88,7 @@ void UIManager::RebuildHierarchy(){
 
 void UIManager::CompileDisplayList(int elementId){
     UIElement* el = ptrStore[elementId].get();
+
     if (!el) return;
 
     bool useScissor = el->clipChildren;
@@ -126,6 +98,7 @@ void UIManager::CompileDisplayList(int elementId){
     }
 
     displayList.push_back({RenderOpType::DrawElement, elementId});
+    drawOrder.emplace_back(elementId);
 
     for (int childId : el->childIds){
         CompileDisplayList(childId);
@@ -137,15 +110,6 @@ void UIManager::CompileDisplayList(int elementId){
     
     
 }
-
-// void UIElement::AddChild(UIElement* child) {
-//     if (!child) return;
-//     this->childIds.push_back(child->id);
-//     child->parentId = this->id;
-//     this->isDirty = true;
-// }
-
-//transferring responsibility to UIManager instead, refactor in progress
 
 void UIManager::AddChild(int parentId, int childId) {
     if (parentId < 0 || parentId >= ptrStore.size() || !ptrStore[parentId]) return;
@@ -164,7 +128,7 @@ void UIElement::UpdateLayout(UIManager *uIManager) {
 }
 
 ScreenLayoutMode UIManager::GetScreenLayoutMode() const{
-    if (dataTables.widths[0] < 600.0f) return ScreenLayoutMode::Mobile;
+    if (dataTables.widths[rootId] < 600.0f) return ScreenLayoutMode::Mobile;
     return ScreenLayoutMode::Desktop;
 }
 
@@ -176,43 +140,47 @@ void UIManager::StepFrame(std::array<float,2>& resolution){
 
     bool geometryNeedsRebuild = false;
 
-    if (!ptrStore.empty() && ptrStore[0]) {
+    if (!ptrStore.empty() && ptrStore[rootId]) {
         float newWidth  = resolution[0];
         float newHeight = resolution[1];
 
-        //i made element 0 in ptrStore the root like <html> or <body>
-        if (dataTables.widths[0] != newWidth || dataTables.heights[0] != newHeight) {
-            dataTables.widths[0] = newWidth;
-            dataTables.heights[0] = newHeight;
-            ptrStore[0]->isDirty = true; 
+        if (dataTables.widths[rootId] != newWidth || dataTables.heights[rootId] != newHeight) {
+            dataTables.widths[rootId] = newWidth;
+            dataTables.heights[rootId] = newHeight;
+            ptrStore[rootId]->isDirty = true; 
         }
     }
 
-    for (size_t i = 0; i < ptrStore.size(); ++i) {
-        if (!ptrStore[i]) continue;
+    size_t elementCount = drawOrder.size();
+
+    for (size_t i = 0; i < elementCount; ++i) {
+        if (drawOrder.size() == 0) continue;
+        int elementId = drawOrder[i];
+        if (!ptrStore[elementId]) continue;
+        if (elementId == rootId) continue; //ignore the root
 
         float parentAbsX = 0.0f;
         float parentAbsY = 0.0f;
-        int pId = ptrStore[i]->parentId;
+        int pId = ptrStore[elementId]->parentId;
 
         if (pId != -1) {
             parentAbsX = dataTables.absoluteX[pId];
             parentAbsY = dataTables.absoluteY[pId];
-        }
+        } //just in case...
 
-        dataTables.absoluteX[i] = dataTables.localX[i] + parentAbsX;
-        dataTables.absoluteY[i] = dataTables.localY[i] + parentAbsY;
+        dataTables.absoluteX[elementId] = dataTables.localX[elementId] + parentAbsX;
+        dataTables.absoluteY[elementId] = dataTables.localY[elementId] + parentAbsY;
 
-        if (ptrStore[i]->isDirty) {
-            ptrStore[i]->UpdateLayout(this);
+        if (ptrStore[elementId]->isDirty) {
+            ptrStore[elementId]->UpdateLayout(this);
             geometryNeedsRebuild = true;
         }
     }
 
     if (geometryNeedsRebuild) {
+        drawOrder.clear();
         globalVertices.clear();
         globalIndices.clear();
-        drawCommands.clear();
 
         DrawCommand currentBatch;
         currentBatch.indexOffset = 0;
@@ -228,7 +196,7 @@ void UIManager::StepFrame(std::array<float,2>& resolution){
                     currentBatch.indexCount = 0;
                 }
 
-                float windowHeight = GetHeight(0);
+                float windowHeight = GetHeight(rootId);
                 float elementWdith = GetWidth(op.elementId);
                 float elementHeight = GetHeight(op.elementId);
                 float elementY = GetAbsoluteY(op.elementId);
