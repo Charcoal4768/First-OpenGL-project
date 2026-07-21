@@ -65,70 +65,81 @@ int main(){
 
     UIManager uIManager;
 
-    AnchorElement root;
-    VerticalContainer container;
-    UIRect rect1;
-    UIRect rect2;
-    UIRect rect3;
-    UIRect rect4;
+	//refaotring to use AddElement template function
 
-	VerticalContainer container2;
-    UIRect rect5;
-    UIRect rect6;
-    UIRect rect7;
-    UIRect rect8;
+    // uIManager.AddElement(&root);
+	// uIManager.AddElement(&container);
+    // uIManager.AddElement(&rect1);
+    // uIManager.AddElement(&rect2);
+    // uIManager.AddElement(&rect3);
+    // uIManager.AddElement(&rect4);
 
-    uIManager.AddElement(&root);
-	uIManager.AddElement(&container);
-    uIManager.AddElement(&rect1);
-    uIManager.AddElement(&rect2);
-    uIManager.AddElement(&rect3);
-    uIManager.AddElement(&rect4);
+    // uIManager.AddElement(&container2);
+    // uIManager.AddElement(&rect5);
+    // uIManager.AddElement(&rect6);
+    // uIManager.AddElement(&rect7);
+    // uIManager.AddElement(&rect8);
 
-    uIManager.AddElement(&container2);
-    uIManager.AddElement(&rect5);
-    uIManager.AddElement(&rect6);
-    uIManager.AddElement(&rect7);
-    uIManager.AddElement(&rect8);
+    // root.AddChild(&container);
+    // container.AddChild(&rect1);
+    // container.AddChild(&rect2);
+    // container.AddChild(&rect3);
+    // container.AddChild(&rect4);
 
-    root.AddChild(&container);
-    container.AddChild(&rect1);
-    container.AddChild(&rect2);
-    container.AddChild(&rect3);
-    container.AddChild(&rect4);
+    // root.AddChild(&container2);
+    // container2.AddChild(&rect5);
+    // container2.AddChild(&rect6);
+    // container2.AddChild(&rect7);
+    // container2.AddChild(&rect8);
 
-    root.AddChild(&container2);
-    container2.AddChild(&rect5);
-    container2.AddChild(&rect6);
-    container2.AddChild(&rect7);
-    container2.AddChild(&rect8);
+    // container.padding = 20.0f;
+    // container.centerHorizontally = false;
+    // container.resizeChildren = false;
+	// container.fitContentHeight = true;
+	// container.fitContentWidth = true;
 
-    container.padding = 20.0f;
-    container.centerHorizontally = false;
-    container.resizeChildren = false;
-	container.fitContentHeight = true;
-	container.fitContentWidth = true;
+	// container2.padding = 12.0f;
+    // container2.centerHorizontally = true;
+    // container2.resizeChildren = true;
+	// container2.fitContentHeight = true;
+	// container2.fitContentWidth = false;
 
-	container2.padding = 12.0f;
-    container2.centerHorizontally = true;
-    container2.resizeChildren = true;
-	container2.fitContentHeight = true;
-	container2.fitContentWidth = false;
-
-    uIManager.EditElement(root.id,      { 0.0f, 0.0f, resolution[0], resolution[1], 1.0f, 1.0f, 1.0f, 1.0f }, true);
-    uIManager.EditElement(container.id, { 200.0f, 20.0f, 30.0f,        6.0f,        0.5f, 0.1f, 0.5f, 1.0f }, true);
+    // uIManager.EditElement(root.id,      { 0.0f, 0.0f, resolution[0], resolution[1], 1.0f, 1.0f, 1.0f, 1.0f }, true);
+    // uIManager.EditElement(container.id, { 200.0f, 20.0f, 30.0f,        6.0f,        0.5f, 0.1f, 0.5f, 1.0f }, true);
     
-    uIManager.EditElement(rect1.id,     { 0.0f, 0.0f, 60.0f,         40.0f,         1.0f, 0.2f, 0.2f, 1.0f }, true); // Soft Red
-    uIManager.EditElement(rect2.id,     { 0.0f, 0.0f, 120.0f,        80.0f,         0.2f, 0.8f, 0.2f, 1.0f }, true); // Soft Green
-    uIManager.EditElement(rect3.id,     { 0.0f, 0.0f, 40.0f,         60.0f,        0.2f, 0.4f, 1.0f, 1.0f }, true); // Soft Blue
-    uIManager.EditElement(rect4.id,     { 0.0f, 0.0f, 90.0f,         90.0f,         1.0f, 0.8f, 0.2f, 1.0f }, true); // Yellow
+    // uIManager.EditElement(rect1.id,     { 0.0f, 0.0f, 60.0f,         40.0f,         1.0f, 0.2f, 0.2f, 1.0f }, true); // Soft Red
+    // uIManager.EditElement(rect2.id,     { 0.0f, 0.0f, 120.0f,        80.0f,         0.2f, 0.8f, 0.2f, 1.0f }, true); // Soft Green
+    // uIManager.EditElement(rect3.id,     { 0.0f, 0.0f, 40.0f,         60.0f,        0.2f, 0.4f, 1.0f, 1.0f }, true); // Soft Blue
+    // uIManager.EditElement(rect4.id,     { 0.0f, 0.0f, 90.0f,         90.0f,         1.0f, 0.8f, 0.2f, 1.0f }, true); // Yellow
 
-    uIManager.EditElement(container2.id, { 320.0f, 230.0f, 200.0f,        300.0f,        0.2f, 0.8f, 0.2f, 1.0f }, true);
+    // uIManager.EditElement(container2.id, { 320.0f, 230.0f, 200.0f,        300.0f,        0.2f, 0.8f, 0.2f, 1.0f }, true);
     
-    uIManager.EditElement(rect5.id,     { 0.0f, 0.0f, 60.0f,         40.0f,         0.3f, 1.0f, 0.4f, 1.0f }, true);
-    uIManager.EditElement(rect6.id,     { 0.0f, 0.0f, 120.0f,        80.0f,         1.0f, 0.2f, 0.8f, 1.0f }, true);
-    uIManager.EditElement(rect7.id,     { 0.0f, 0.0f, 40.0f,         60.0f,        0.4f, 0.1f, 0.7f, 1.0f }, true);
-    uIManager.EditElement(rect8.id,     { 0.0f, 0.0f, 90.0f,         90.0f,         0.8f, 1.0f, 0.4f, 1.0f }, true);
+    // uIManager.EditElement(rect5.id,     { 0.0f, 0.0f, 60.0f,         40.0f,         0.3f, 1.0f, 0.4f, 1.0f }, true);
+    // uIManager.EditElement(rect6.id,     { 0.0f, 0.0f, 120.0f,        80.0f,         1.0f, 0.2f, 0.8f, 1.0f }, true);
+    // uIManager.EditElement(rect7.id,     { 0.0f, 0.0f, 40.0f,         60.0f,        0.4f, 0.1f, 0.7f, 1.0f }, true);
+    // uIManager.EditElement(rect8.id,     { 0.0f, 0.0f, 90.0f,         90.0f,         0.8f, 1.0f, 0.4f, 1.0f }, true);
+	
+	auto root = uIManager.AddElement<UIRect>();
+	auto container = uIManager.AddElement<VerticalContainer>();
+	auto rect1 = uIManager.AddElement<UIRect>();
+	auto rect2 = uIManager.AddElement<UIRect>();
+	auto rect3 = uIManager.AddElement<UIRect>();
+	auto rect4 = uIManager.AddElement<UIRect>();
+
+	uIManager.AddChild(root, container);
+	uIManager.AddChild(container, rect1);
+	uIManager.AddChild(container, rect2);
+	uIManager.AddChild(container, rect3);
+	uIManager.AddChild(container, rect4);
+
+	uIManager.EditElement(root,      { 0.0f, 0.0f, resolution[0], resolution[1], 1.0f, 1.0f, 1.0f, 1.0f }, true);
+	uIManager.EditElement(container, { 200.0f, 20.0f, 30.0f,        6.0f,        0.5f, 0.1f, 0.5f, 1.0f }, true);
+	uIManager.EditElement(rect1,     { 0.0f, 0.0f, 60.0f,         40.0f,         0.3f, 1.0f, 0.4f, 1.0f }, true);
+	uIManager.EditElement(rect2,     { 0.0f, 0.0f, 120.0f,        80.0f,         0.2f, 0.8f, 0.2f, 1.0f }, true);
+	uIManager.EditElement(rect3,     { 0.0f, 0.0f, 40.0f,         60.0f,        0.2f, 0.4f, 1.0f, 1.0f }, true);
+	uIManager.EditElement(rect4,     { 0.0f, 0.0f, 90.0f,         90.0f,         1.0f, 0.8f, 0.2f, 1.0f }, true);
+
+	
 
 	while(!glfwWindowShouldClose(window)){
         glfwWaitEventsTimeout(1.0);

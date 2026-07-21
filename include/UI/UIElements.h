@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <array>
+#include <memory>
 #include <glad/glad.h>
 
 class UIManager;
@@ -102,7 +103,7 @@ public:
 
 class UIManager {
 private:
-    std::vector<UIElement*> registry;//permanent
+    std::vector<std::unique_ptr<UIElement>> ptrStore;
     std::vector<RenderOp> displayList;
 
     UIStateTables dataTables;
@@ -120,11 +121,12 @@ public:
     int defaultCapacity = 100;
 
     void Init();
-    void UpdateRegistry();
-    void AddElement(UIElement* uI);
+    void UpdateptrStore();
+    // void AddElement(UIElement* uI);
     void EditElement(int id, const ElementGeometry& props, bool dirtyChain);
     void SyncElementToCache(int id);
     void StepFrame(std::array<float, 2>& resolution);//first element will always be the root make it the size of resolution
+    void AddChild(int parentId, int childId);
     void RebuildHierarchy();
 
     UIElement* GetElement(int id) const;
@@ -143,6 +145,26 @@ public:
     float GetHeight(int id) const { return dataTables.heights[id]; }
 
     ScreenLayoutMode GetScreenLayoutMode() const;
+    template <typename T>
+    int AddElement(){
+        auto element = std::make_unique<T>();
+        int newID = static_cast<int>(ptrStore.size());
+        element -> id = newID;
+        ptrStore.push_back(std::move(element));
+
+        dataTables.localX.push_back(0.0f);
+        dataTables.localY.push_back(0.0f);
+        dataTables.widths.push_back(100.0f);
+        dataTables.heights.push_back(100.0f);
+        dataTables.r.push_back(1.0f);
+        dataTables.g.push_back(1.0f);
+        dataTables.b.push_back(1.0f);
+        dataTables.a.push_back(1.0f);
+        
+        dataTables.absoluteX.push_back(0.0f);
+        dataTables.absoluteY.push_back(0.0f);
+        return newID;
+    }
 };
 
 class AnchorElement : public UIElement {
@@ -166,7 +188,7 @@ public:
     bool resizeChildren = false;
     float r = 0.6f, g = 0.1f, b = 0.8f;
     GeometryView Draw(const UIManager& manager) override;
-    virtual void UpdateLayout(UIManager* uIManager) override;
+    void UpdateLayout(UIManager* uIManager) override;
 };
 
 #endif

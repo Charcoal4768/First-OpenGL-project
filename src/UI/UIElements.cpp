@@ -15,22 +15,22 @@ ScissorRect IntersectRects(const ScissorRect& a, const ScissorRect& b){
     return {x1, y1, x2 - x1, y2 - y1};
 }
 
-UIElement* UIManager::GetElement(int id) const {
-    if (id >= 0 && id < registry.size()){
-        return registry[id];
-    }
-    return nullptr;
-}
+// UIElement* UIManager::GetElement(int id) const {
+//     if (id >= 0 && id < ptrStore.size()){
+//         return ptrStore[id].get();
+//     }
+//     return nullptr;
+// }
 
 // void UIManager::Init(){
-//     registry.reserve(defaultCapacity);
+//     ptrStore.reserve(defaultCapacity);
 //     elementBucket.reserve(defaultCapacity);
 // }
 
-// void UIManager::UpdateRegistry(){
+// void UIManager::UpdateptrStore(){
 //     //if items in elementBucket, move to
-//     //registry and then clear out elementBucket at the end
-//     //how to map out registry
+//     //ptrStore and then clear out elementBucket at the end
+//     //how to map out ptrStore
 //     //parents and children should be in "groups"
 //     //where the parents leads and children trail behind
 //     if (elementBucket.empty()) return;
@@ -38,8 +38,8 @@ UIElement* UIManager::GetElement(int id) const {
 // }
 
 void UIManager::EditElement(int id, const ElementGeometry& props, bool dirtyChain){
-    if (id >= 0 && id < registry.size() && registry[id] != nullptr){
-        UIElement* el = registry[id];
+    if (id >= 0 && id < ptrStore.size() && ptrStore[id] != nullptr){
+        UIElement* el = ptrStore[id].get();
 
         bool sizeChanged = (dataTables.widths[id] != props.width || dataTables.heights[id] != props.height);
 
@@ -52,17 +52,16 @@ void UIManager::EditElement(int id, const ElementGeometry& props, bool dirtyChai
         dataTables.b[id]       = props.b;
         dataTables.a[id]       = props.a;
 
-        // ONLY flag the parent chain dirty if explicitly requested!
         if (dirtyChain && sizeChanged && el->parentId > -1) {
-            if (registry[el->parentId]) {
-                registry[el->parentId]->isDirty = true;
+            if (ptrStore[el->parentId]) {
+                ptrStore[el->parentId]->isDirty = true;
             }
         }
     }
 }
 
 ElementGeometry UIManager::GetElementProperties(int id) const {
-    if (id < 0 || id >= registry.size() || registry[id] == nullptr) {
+    if (id < 0 || id >= ptrStore.size() || ptrStore[id] == nullptr) {
         return {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f}; 
     }
 
@@ -78,24 +77,24 @@ ElementGeometry UIManager::GetElementProperties(int id) const {
     };
 }
 
-void UIManager::AddElement(UIElement* uI) {
-    if (!uI) return;
+// void UIManager::AddElement(UIElement* uI) {
+//     if (!uI) return;
 
-    uI->id = static_cast<int>(registry.size());
-    registry.push_back(uI);
+//     uI->id = static_cast<int>(ptrStore.size());
+//     ptrStore.push_back(uI);
 
-    dataTables.localX.push_back(0.0f);
-    dataTables.localY.push_back(0.0f);
-    dataTables.widths.push_back(100.0f);
-    dataTables.heights.push_back(100.0f);
-    dataTables.r.push_back(1.0f);
-    dataTables.g.push_back(1.0f);
-    dataTables.b.push_back(1.0f);
-    dataTables.a.push_back(1.0f);
+//     dataTables.localX.push_back(0.0f);
+//     dataTables.localY.push_back(0.0f);
+//     dataTables.widths.push_back(100.0f);
+//     dataTables.heights.push_back(100.0f);
+//     dataTables.r.push_back(1.0f);
+//     dataTables.g.push_back(1.0f);
+//     dataTables.b.push_back(1.0f);
+//     dataTables.a.push_back(1.0f);
     
-    dataTables.absoluteX.push_back(0.0f);
-    dataTables.absoluteY.push_back(0.0f);
-}
+//     dataTables.absoluteX.push_back(0.0f);
+//     dataTables.absoluteY.push_back(0.0f);
+// }
 
 void UIManager::RebuildHierarchy(){
     if (!hirearchyDirty) return;
@@ -103,11 +102,12 @@ void UIManager::RebuildHierarchy(){
     displayList.clear();
 
     int rootId = 0;
-    for (UIElement *element : registry){
+    for (auto& ptr : ptrStore){
+        UIElement *element = ptr.get();
         int elementparentId = element->parentId;
         if(elementparentId == -1) rootId = element -> id;
     }
-    if (!registry.empty() && registry[rootId]){
+    if (!ptrStore.empty() && ptrStore[rootId]){
         CompileDisplayList(0);
     }
 
@@ -116,7 +116,7 @@ void UIManager::RebuildHierarchy(){
 }
 
 void UIManager::CompileDisplayList(int elementId){
-    UIElement* el = registry[elementId];
+    UIElement* el = ptrStore[elementId].get();
     if (!el) return;
 
     bool useScissor = el->clipChildren;
@@ -138,11 +138,25 @@ void UIManager::CompileDisplayList(int elementId){
     
 }
 
-void UIElement::AddChild(UIElement* child) {
-    if (!child) return;
-    this->childIds.push_back(child->id);
-    child->parentId = this->id;
-    this->isDirty = true;
+// void UIElement::AddChild(UIElement* child) {
+//     if (!child) return;
+//     this->childIds.push_back(child->id);
+//     child->parentId = this->id;
+//     this->isDirty = true;
+// }
+
+//transferring responsibility to UIManager instead, refactor in progress
+
+void UIManager::AddChild(int parentId, int childId) {
+    if (parentId < 0 || parentId >= ptrStore.size() || !ptrStore[parentId]) return;
+    if (childId < 0 || childId >= ptrStore.size() || !ptrStore[childId]) return;
+
+    UIElement* parent = ptrStore[parentId].get();
+    UIElement* child = ptrStore[childId].get();
+
+    parent->childIds.push_back(child->id);
+    child->parentId = parent->id;
+    parent->isDirty = true;
 }
 
 void UIElement::UpdateLayout(UIManager *uIManager) {
@@ -162,24 +176,24 @@ void UIManager::StepFrame(std::array<float,2>& resolution){
 
     bool geometryNeedsRebuild = false;
 
-    if (!registry.empty() && registry[0]) {
+    if (!ptrStore.empty() && ptrStore[0]) {
         float newWidth  = resolution[0];
         float newHeight = resolution[1];
 
-        //i made element 0 in registry the root like <html> or <body>
+        //i made element 0 in ptrStore the root like <html> or <body>
         if (dataTables.widths[0] != newWidth || dataTables.heights[0] != newHeight) {
             dataTables.widths[0] = newWidth;
             dataTables.heights[0] = newHeight;
-            registry[0]->isDirty = true; 
+            ptrStore[0]->isDirty = true; 
         }
     }
 
-    for (size_t i = 0; i < registry.size(); ++i) {
-        if (!registry[i]) continue;
+    for (size_t i = 0; i < ptrStore.size(); ++i) {
+        if (!ptrStore[i]) continue;
 
         float parentAbsX = 0.0f;
         float parentAbsY = 0.0f;
-        int pId = registry[i]->parentId;
+        int pId = ptrStore[i]->parentId;
 
         if (pId != -1) {
             parentAbsX = dataTables.absoluteX[pId];
@@ -189,8 +203,8 @@ void UIManager::StepFrame(std::array<float,2>& resolution){
         dataTables.absoluteX[i] = dataTables.localX[i] + parentAbsX;
         dataTables.absoluteY[i] = dataTables.localY[i] + parentAbsY;
 
-        if (registry[i]->isDirty) {
-            registry[i]->UpdateLayout(this);
+        if (ptrStore[i]->isDirty) {
+            ptrStore[i]->UpdateLayout(this);
             geometryNeedsRebuild = true;
         }
     }
@@ -255,7 +269,7 @@ void UIManager::StepFrame(std::array<float,2>& resolution){
             }
 
             else if (op.type == RenderOpType::DrawElement){
-                UIElement* element = registry[op.elementId];
+                UIElement* element = ptrStore[op.elementId].get();
                 if (element){
                     GeometryView view = element->Draw(*this);
                     GLuint baseVertexOffset = static_cast<GLuint>(globalVertices.size());
