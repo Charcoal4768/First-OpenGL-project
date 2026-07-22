@@ -9,6 +9,9 @@
 #include <openglBasics/EBO.h>
 #include <UI/UIElements.h>
 
+//this file is used purely as a showcase for the framework
+//this is not part of the UI framework
+
 std::array<float, 2> resolution{
 	800.0f,
 	800.0f
@@ -106,8 +109,21 @@ int main(){
 	c2.resizeChildren = false;
 	c2.clipChildren = true;
 
+	double lastTime = glfwGetTime();
+	int frameCount = 0;
+
 	while(!glfwWindowShouldClose(window)){
-        glfwWaitEventsTimeout(1.0);
+		double currentTime = glfwGetTime();
+		frameCount++;
+		if (currentTime - lastTime >= 1.0)
+		{
+			std::string title = "UI Engine - " + std::to_string(frameCount) + " FPS";
+			glfwSetWindowTitle(window, title.c_str());
+			frameCount = 0;
+			lastTime = currentTime;
+		}
+		
+        glfwPollEvents();
 		glClearColor(0.07f, 0.13f, 0.17f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 

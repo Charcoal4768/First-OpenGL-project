@@ -26,7 +26,8 @@ void UIManager::EditElement(int id, const ElementGeometry& props, bool dirtyChai
     if (id >= 0 && id < ptrStore.size() && ptrStore[id] != nullptr){
         UIElement* el = ptrStore[id].get();
 
-        bool sizeChanged = (dataTables.widths[id] != props.width || dataTables.heights[id] != props.height);
+        bool positionOrSizeChanged = (dataTables.localX[id] != props.x || dataTables.localY[id] != props.y ||
+                                    dataTables.widths[id] != props.width || dataTables.heights[id] != props.height);
 
         dataTables.localX[id]  = props.x;
         dataTables.localY[id]  = props.y;
@@ -37,9 +38,10 @@ void UIManager::EditElement(int id, const ElementGeometry& props, bool dirtyChai
         dataTables.b[id]       = props.b;
         dataTables.a[id]       = props.a;
 
-        if (dirtyChain && sizeChanged && el->parentId > -1) {
-            if (ptrStore[el->parentId]) {
-                ptrStore[el->parentId]->isDirty = true;
+        if (dirtyChain && positionOrSizeChanged) {
+            el->isDirty = true; // <--- Mark the edited element ITSELF dirty!
+            if (el->parentId != -1 && ptrStore[el->parentId]) {
+                ptrStore[el->parentId]->isDirty = true; // Mark parent dirty
             }
         }
     }
@@ -68,7 +70,7 @@ void UIManager::RebuildHierarchy(){
     displayList.clear();
 
     // this old method used to search its own data to find the root
-    // that felt kinda wrong so i think the dev using the framework should
+    // that felt kinda wrong so i think any dev using the framework should
     // be setting the root with a SetRoot function
 
     // for (auto& ptr : ptrStore){
@@ -78,6 +80,7 @@ void UIManager::RebuildHierarchy(){
     // } 
 
     if (!ptrStore.empty() && ptrStore[rootId]){
+        drawOrder.clear();
         drawOrder.reserve(ptrStore.size());
         CompileDisplayList(rootId);
     }
@@ -148,39 +151,41 @@ void UIManager::StepFrame(std::array<float,2>& resolution){
             dataTables.widths[rootId] = newWidth;
             dataTables.heights[rootId] = newHeight;
             ptrStore[rootId]->isDirty = true; 
+            geometryNeedsRebuild = true;
         }
     }
 
     size_t elementCount = drawOrder.size();
 
-    for (size_t i = 0; i < elementCount; ++i) {
-        if (drawOrder.size() == 0) continue;
-        int elementId = drawOrder[i];
-        if (!ptrStore[elementId]) continue;
-        if (elementId == rootId) continue; //ignore the root
+    if (elementCount > 0){
+        for (int elementId : drawOrder) {
+            // int elementId = drawOrder[i];
+            if (!ptrStore[elementId]) continue;
+            // if (elementId == rootId) continue; //ignore the root
 
-        float parentAbsX = 0.0f;
-        float parentAbsY = 0.0f;
-        int pId = ptrStore[elementId]->parentId;
+            float parentAbsX = 0.0f;
+            float parentAbsY = 0.0f;
+            int pId = ptrStore[elementId]->parentId;
 
-        if (pId != -1) {
-            parentAbsX = dataTables.absoluteX[pId];
-            parentAbsY = dataTables.absoluteY[pId];
-        } //just in case...
+            if (pId != -1) {
+                parentAbsX = dataTables.absoluteX[pId];
+                parentAbsY = dataTables.absoluteY[pId];
+            } //just in case...
 
-        dataTables.absoluteX[elementId] = dataTables.localX[elementId] + parentAbsX;
-        dataTables.absoluteY[elementId] = dataTables.localY[elementId] + parentAbsY;
+            dataTables.absoluteX[elementId] = dataTables.localX[elementId] + parentAbsX;
+            dataTables.absoluteY[elementId] = dataTables.localY[elementId] + parentAbsY;
 
-        if (ptrStore[elementId]->isDirty) {
-            ptrStore[elementId]->UpdateLayout(this);
-            geometryNeedsRebuild = true;
+            if (ptrStore[elementId]->isDirty) {
+                ptrStore[elementId]->UpdateLayout(this);
+                geometryNeedsRebuild = true;
+            }
         }
     }
 
     if (geometryNeedsRebuild) {
-        drawOrder.clear();
         globalVertices.clear();
         globalIndices.clear();
+        drawCommands.clear();
 
         DrawCommand currentBatch;
         currentBatch.indexOffset = 0;
