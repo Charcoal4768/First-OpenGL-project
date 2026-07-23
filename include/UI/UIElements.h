@@ -7,6 +7,9 @@
 #include <glad/glad.h>
 #include <cassert>
 
+constexpr float F_UNSET = -1.0f;
+constexpr float I_UNSET = I_UNSET;
+
 class UIManager;
 
 struct Vertex
@@ -26,8 +29,8 @@ struct ScissorRect{
 };
 
 struct DrawCommand{
-    size_t indexOffset = 0;
-    GLsizei indexCount = 0;
+    size_t indexOffset = I_UNSET;
+    GLsizei indexCount = I_UNSET;
     bool useScissor = false;
     ScissorRect scissorBox;
 };
@@ -84,33 +87,39 @@ struct UIStateTables {
 
 //ui element dosent know who it is without a manager lol
 class UIElement {
+private:
+    RectShape drawRect;
 public:
     bool isDirty = true;
     bool fitContentHeight = false;
     bool fitContentWidth = false;
     bool clipChildren = false;
 
-    int id = -1;
-    int parentId = -1;
+    int id = I_UNSET;
+    int parentId = I_UNSET;
 
-    int minWidth;
-    int maxWidth;
+    float minWidth = F_UNSET;
+    float maxWidth = F_UNSET;
 
-    int minHeight;
-    int maxHeight;
+    float minHeight = 9000.0f;
+    float maxHeight = 9000.0f;
 
-    int widthPercent;
-    int heightPercent;
+    float widthPercent = F_UNSET; //b/w 0.0f and 1.0f
+    float heightPercent = F_UNSET;
 
     std::vector<int> childIds;
 
     virtual ~UIElement() = default;
 
-    virtual GeometryView Draw(const UIManager& manager) = 0;
-    virtual void UpdateLayout(UIManager* uIManager);//why do ppl even tell me to put =0 here, itll break
-    void AddChild(UIElement* child);
+    virtual GeometryView Draw(const UIManager& manager);
+    virtual void UpdateLayout(UIManager* uIManager);
 };
 
+//it's already a god class...
+//renderer, ui layout manager
+//"lifetime" manager
+//hirearchy manager
+//gonna fix this mess soon
 class UIManager {
 private:
     std::vector<std::unique_ptr<UIElement>> ptrStore;
@@ -191,22 +200,22 @@ public:
     GeometryView Draw(const UIManager& manager) override;
 };
 
-class UIRect : public UIElement {
-private:
-    RectShape drawRect;
-public:
-    GeometryView Draw(const UIManager& manager) override;
+class PaddedElement : public UIElement {
+    public:
+    float padding = 5.0f;
 };
 
-class VerticalContainer : public UIElement {
-private:
-    RectShape drawRect;
+class UIRect : public PaddedElement {
 public:
-    float padding = 10.0f;
+    // GeometryView Draw(const UIManager& manager) override;
+};
+
+class VerticalContainer : public PaddedElement {
+public:
     bool centerHorizontally = true;
     bool resizeChildren = false;
     float r = 0.6f, g = 0.1f, b = 0.8f;
-    GeometryView Draw(const UIManager& manager) override;
+    // GeometryView Draw(const UIManager& manager) override;
     void UpdateLayout(UIManager* uIManager) override;
 };
 

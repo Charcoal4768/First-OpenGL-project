@@ -8,25 +8,26 @@ float parentWidth, float parentHeight, float minWidth, float minHeight,
 float maxWidth, float maxHeight, float preferredWidthPercent, float preferredHeightPercent){
     //we want final size to be basically css clamp() type stuff
     //preferredWidth/Height are percentages: 0.0 -> 1.0
-    //also, either Percentages or absolute pixel sizing
+    //also, either Percentages or absolute pixel sizing, both = bug in the app using this framework
 
     float prefferedWidth;
     float prefferedHeight;
 
-    if (preferredHeightPercent || preferredWidthPercent)
-    {
-        float prefferedWidth = preferredWidthPercent*parentWidth;
-        float prefferedHeight = preferredWidthPercent*parentHeight;
-    } else {
-        float prefferedWidth = computedWidth;
-        float prefferedHeight = computedHeight;
-    }
+    prefferedWidth = (preferredWidthPercent > 0.0f) ? (preferredWidthPercent * parentWidth) : computedWidth;
+    prefferedHeight = (preferredHeightPercent > 0.0f) ? (preferredHeightPercent * parentHeight) : computedHeight;
 
-    float trueMaxWidth = std::min(parentWidth, maxWidth);
-    float trueMaxHeight = std::min(parentHeight, maxHeight);
+    if (maxWidth >= 0.0f) prefferedWidth = std::min(prefferedWidth, maxWidth);
+    if (maxHeight >= 0.0f) prefferedHeight = std::min(prefferedHeight, maxHeight);
 
-    float finalWidth = std::max(minWidth, std::min(prefferedWidth, trueMaxWidth));
-    float finalHeight = std::max(minHeight, std::min(prefferedHeight, trueMaxHeight));
+    float finalWidth = prefferedWidth;
+
+    if (minWidth != F_UNSET)
+        finalWidth = std::max(finalWidth, minWidth);
+
+    float finalHeight = prefferedHeight;
+
+    if (minHeight != F_UNSET)
+        finalHeight = std::max(finalHeight, minHeight);
 
     return {finalWidth, finalHeight};
 }
@@ -297,19 +298,12 @@ Color UIManager::GetColor(int id) const {
     return { 1.0f, 1.0f, 1.0f, 1.0f };
 }
 
-GeometryView UIRect::Draw(const UIManager& manager){
+GeometryView UIElement::Draw(const UIManager& manager){
     float cachedWidth = manager.GetWidth(this->id);
     float cachedHeight = manager.GetHeight(this->id);
 
     float absX = manager.GetAbsoluteX(this->id);
     float absY = manager.GetAbsoluteY(this->id);
-
-    // std::cout << "Element ID: " << this->id << ", Absolute X: " << absX << ", Absolute Y: " << absY << std::endl;
-
-    float localX = manager.GetElementProperties(this->id).x;
-    float localY = manager.GetElementProperties(this->id).y;
-
-    // std::cout <<", Local X: " << localX << ", Local Y: " << localY << std::endl;
 
     Color col = manager.GetColor(this->id);
 
@@ -326,23 +320,6 @@ GeometryView AnchorElement::Draw(const UIManager& manager) {
     float absY = manager.GetAbsoluteY(this->id);
 
     return { nullptr, 0, nullptr, 0 };
-}
-
-GeometryView VerticalContainer::Draw(const UIManager& manager) {
-    float cachedWidth  = manager.GetWidth(this->id);
-    float cachedHeight = manager.GetHeight(this->id);
-
-    float absX = manager.GetAbsoluteX(this->id);
-    float absY = manager.GetAbsoluteY(this->id);
-
-    Color col = manager.GetColor(this->id);
-
-    drawRect.localVertices[0] = {{absX,               absY,                0.0f},{col.r,col.g,col.b,col.a}};
-    drawRect.localVertices[1] = {{absX + cachedWidth, absY,                0.0f},{col.r,col.g,col.b,col.a}};
-    drawRect.localVertices[2] = {{absX + cachedWidth, absY + cachedHeight, 0.0f},{col.r,col.g,col.b,col.a}};
-    drawRect.localVertices[3] = {{absX,               absY + cachedHeight, 0.0f},{col.r,col.g,col.b,col.a}};
-
-    return { drawRect.localVertices.data(), drawRect.localVertices.size(), drawRect.localIndices.data(), drawRect.localIndices.size() };
 }
 
 void VerticalContainer::UpdateLayout(UIManager* uIManager){
