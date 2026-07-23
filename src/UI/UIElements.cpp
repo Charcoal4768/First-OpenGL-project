@@ -3,6 +3,34 @@
 #include <algorithm>
 #include <iostream>
 
+std::array<float,2> ApplyConstraints(float computedWidth, float computedHeight, 
+float parentWidth, float parentHeight, float minWidth, float minHeight, 
+float maxWidth, float maxHeight, float preferredWidthPercent, float preferredHeightPercent){
+    //we want final size to be basically css clamp() type stuff
+    //preferredWidth/Height are percentages: 0.0 -> 1.0
+    //also, either Percentages or absolute pixel sizing
+
+    float prefferedWidth;
+    float prefferedHeight;
+
+    if (preferredHeightPercent || preferredWidthPercent)
+    {
+        float prefferedWidth = preferredWidthPercent*parentWidth;
+        float prefferedHeight = preferredWidthPercent*parentHeight;
+    } else {
+        float prefferedWidth = computedWidth;
+        float prefferedHeight = computedHeight;
+    }
+
+    float trueMaxWidth = std::min(parentWidth, maxWidth);
+    float trueMaxHeight = std::min(parentHeight, maxHeight);
+
+    float finalWidth = std::max(minWidth, std::min(prefferedWidth, trueMaxWidth));
+    float finalHeight = std::max(minHeight, std::min(prefferedHeight, trueMaxHeight));
+
+    return {finalWidth, finalHeight};
+}
+
 ScissorRect IntersectRects(const ScissorRect& a, const ScissorRect& b){
     GLint x1 = std::max(a.x, b.x);
     GLint y1 = std::max(a.y, b.y);

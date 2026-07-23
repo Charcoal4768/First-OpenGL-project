@@ -93,6 +93,15 @@ public:
     int id = -1;
     int parentId = -1;
 
+    int minWidth;
+    int maxWidth;
+
+    int minHeight;
+    int maxHeight;
+
+    int widthPercent;
+    int heightPercent;
+
     std::vector<int> childIds;
 
     virtual ~UIElement() = default;
