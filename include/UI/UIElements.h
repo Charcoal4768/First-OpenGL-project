@@ -43,6 +43,9 @@ struct ElementGeometry {
 
 struct Color{
     float r, g, b, a;
+    bool operator!=(const Color& other) const {
+        return r != other.r || g != other.g || b != other.b || a != other.a;
+    }
 };
 
 enum class ScreenLayoutMode {
@@ -69,23 +72,42 @@ struct GeometryView {
     size_t indexCount;
 };
 
-//UIManager wont become a god class if i do this... right..?
-struct UIStateTables {
-    std::vector<float> localX;
-    std::vector<float> localY;
-    std::vector<float> widths;
-    std::vector<float> heights;
-    
-    std::vector<float> r;
-    std::vector<float> g;
-    std::vector<float> b;
-    std::vector<float> a;
+struct GeometryStoreState{
+    float localX = F_UNSET;
+    float localY = F_UNSET;
+    float width = F_UNSET;
+    float height = F_UNSET;
 
-    std::vector<float> absoluteX;
-    std::vector<float> absoluteY;
+    float absoluteX = F_UNSET;
+    float absoluteY = F_UNSET;
+    bool operator!=(const GeometryStoreState& other) const {
+        return localX != other.localX || localY != other.localY ||
+        width != other.width || height != other.height;
+    } //abs comparison delibirately ignored
 };
 
-//ui element dosent know who it is without a manager lol
+struct ConstraintStoreState{
+    float minWidth = F_UNSET;
+    float minHeight = F_UNSET;
+
+    float maxWidth = F_UNSET;
+    float maxHeight = F_UNSET;
+
+    float prefferedWidthPercent = F_UNSET;
+    float prefferedHeightPercent = F_UNSET;
+};
+
+// struct ColorStoreState{
+//     float r,g,b,a;
+// };
+
+struct UIStateTables {
+    std::vector<GeometryStoreState> geometry;
+    std::vector<ConstraintStoreState> constraints;
+    std::vector<Color> colors;
+};
+
+//ui element dosent know who it is without a manager
 class UIElement {
 private:
     RectShape drawRect;
@@ -111,8 +133,8 @@ public:
 
     virtual ~UIElement() = default;
 
-    virtual GeometryView Draw(const UIManager& manager);
-    virtual void UpdateLayout(UIManager* uIManager);
+    virtual GeometryView Draw(const UIStateTables& data);
+    virtual void UpdateLayout(UIStateTables& data);
 };
 
 //it's already a god class...
@@ -144,25 +166,27 @@ public:
     void Init();
     void UpdateptrStore();
     void SetRoot(int id);
-    void EditElement(int id, const ElementGeometry& props, bool dirtyChain);
+    void EditElementShape(int id, const GeometryStoreState& props, bool dirtyChain);
+    void EditElementColor(int id, const Color& props, bool dirtyChain);
     void SyncElementToCache(int id);
     void StepFrame(std::array<float, 2>& resolution);//first element will always be the root make it the size of resolution
     void AddChild(int parentId, int childId);
     void RebuildHierarchy();
 
     UIElement* GetElement(int id) const;
-    ElementGeometry GetElementProperties(int id) const;
-    Color GetColor(int id) const;
+    const GeometryStoreState& GetElementShape(int id) const;
+    const ConstraintStoreState& GetElementConstraints(int id) const;
+    const Color& GetElementColor(int id) const;
     
-    float GetAbsoluteX(int id) const { return (id >= 0 && id < dataTables.absoluteX.size()) ? dataTables.absoluteX[id] : 0.0f; }
-    float GetAbsoluteY(int id) const { return (id >= 0 && id < dataTables.absoluteY.size()) ? dataTables.absoluteY[id] : 0.0f; }
-    void SetAbsoluteX(int id, float val) { if (id >= 0 && id < dataTables.absoluteX.size()) dataTables.absoluteX[id] = val; }
-    void SetAbsoluteY(int id, float val) { if (id >= 0 && id < dataTables.absoluteY.size()) dataTables.absoluteY[id] = val; }
+    float GetAbsoluteX(int id) const { return (id >= 0 && id < dataTables.geometry.size()) ? dataTables.geometry[id].absoluteX : 0.0f; }
+    float GetAbsoluteY(int id) const { return (id >= 0 && id < dataTables.geometry.size()) ? dataTables.geometry[id].absoluteY : 0.0f; }
+    void SetAbsoluteX(int id, float val) { if (id >= 0 && id < dataTables.geometry.size()) dataTables.geometry[id].absoluteX = val; }
+    void SetAbsoluteY(int id, float val) { if (id >= 0 && id < dataTables.geometry.size()) dataTables.geometry[id].absoluteY = val; }
 
-    float GetLocalX(int id) const { return dataTables.localX[id]; }
-    float GetLocalY(int id) const { return dataTables.localY[id]; }
-    float GetWidth(int id) const  { return dataTables.widths[id]; }
-    float GetHeight(int id) const { return dataTables.heights[id]; }
+    float GetLocalX(int id) const { return dataTables.geometry[id].localX; }
+    float GetLocalY(int id) const { return dataTables.geometry[id].localY; }
+    float GetWidth(int id) const  { return dataTables.geometry[id].width; }
+    float GetHeight(int id) const { return dataTables.geometry[id].height; }
 
     ScreenLayoutMode GetScreenLayoutMode() const;
     template <typename T>
@@ -172,17 +196,24 @@ public:
         element -> id = newID;
         ptrStore.push_back(std::move(element));
 
-        dataTables.localX.push_back(0.0f);
-        dataTables.localY.push_back(0.0f);
-        dataTables.widths.push_back(100.0f);
-        dataTables.heights.push_back(100.0f);
-        dataTables.r.push_back(1.0f);
-        dataTables.g.push_back(1.0f);
-        dataTables.b.push_back(1.0f);
-        dataTables.a.push_back(1.0f);
-        
-        dataTables.absoluteX.push_back(0.0f);
-        dataTables.absoluteY.push_back(0.0f);
+        GeometryStoreState elementShape;
+        Color elementColor;
+
+        elementShape.localX = F_UNSET;
+        elementShape.localY = F_UNSET;
+        elementShape.width = F_UNSET;
+        elementShape.height = F_UNSET;
+
+        elementShape.absoluteX = 0.0f;
+        elementShape.absoluteY = 0.0f;
+
+        elementColor.r = 1.0f;
+        elementColor.g = 1.0f;
+        elementColor.b = 1.0f;
+        elementColor.a = 1.0f;
+
+        dataTables.geometry.push_back(elementShape);
+        dataTables.geometry.push_back(elementColor);
         return newID;
     }
 
@@ -197,7 +228,7 @@ public:
 
 class AnchorElement : public UIElement {
 public:
-    GeometryView Draw(const UIManager& manager) override;
+    GeometryView Draw(const UIStateTables& data) override;
 };
 
 class PaddedElement : public UIElement {
@@ -216,7 +247,7 @@ public:
     bool resizeChildren = false;
     float r = 0.6f, g = 0.1f, b = 0.8f;
     // GeometryView Draw(const UIManager& manager) override;
-    void UpdateLayout(UIManager* uIManager) override;
+    void UpdateLayout(UIStateTables& data) override;
 };
 
 #endif

@@ -4,30 +4,28 @@
 #include <iostream>
 
 std::array<float,2> ApplyConstraints(float computedWidth, float computedHeight, 
-float parentWidth, float parentHeight, float minWidth, float minHeight, 
-float maxWidth, float maxHeight, float preferredWidthPercent, float preferredHeightPercent){
+float parentWidth, float parentHeight, const ConstraintStoreState& constraints){
     //we want final size to be basically css clamp() type stuff
     //preferredWidth/Height are percentages: 0.0 -> 1.0
     //also, either Percentages or absolute pixel sizing, both = bug in the app using this framework
-
     float prefferedWidth;
     float prefferedHeight;
 
-    prefferedWidth = (preferredWidthPercent > 0.0f) ? (preferredWidthPercent * parentWidth) : computedWidth;
-    prefferedHeight = (preferredHeightPercent > 0.0f) ? (preferredHeightPercent * parentHeight) : computedHeight;
+    prefferedWidth = (constraints.prefferedWidthPercent > F_UNSET) ? (constraints.prefferedWidthPercent * parentWidth) : computedWidth;
+    prefferedHeight = (constraints.prefferedHeightPercent > F_UNSET) ? (constraints.prefferedHeightPercent * parentHeight) : computedHeight;
 
-    if (maxWidth >= 0.0f) prefferedWidth = std::min(prefferedWidth, maxWidth);
-    if (maxHeight >= 0.0f) prefferedHeight = std::min(prefferedHeight, maxHeight);
+    if (constraints.maxWidth >= F_UNSET) prefferedWidth = std::min(prefferedWidth, constraints.maxWidth);
+    if (constraints.maxHeight >= F_UNSET) prefferedHeight = std::min(prefferedHeight, constraints.maxHeight);
 
     float finalWidth = prefferedWidth;
 
-    if (minWidth != F_UNSET)
-        finalWidth = std::max(finalWidth, minWidth);
+    if (constraints.minWidth != F_UNSET)
+        finalWidth = std::max(finalWidth, constraints.minWidth);
 
     float finalHeight = prefferedHeight;
 
-    if (minHeight != F_UNSET)
-        finalHeight = std::max(finalHeight, minHeight);
+    if (constraints.minHeight != F_UNSET)
+        finalHeight = std::max(finalHeight, constraints.minHeight);
 
     return {finalWidth, finalHeight};
 }
@@ -51,46 +49,75 @@ void UIManager::SetRoot(int id){
     rootId = id;
 }
 
-void UIManager::EditElement(int id, const ElementGeometry& props, bool dirtyChain){
-    if (id >= 0 && id < ptrStore.size() && ptrStore[id] != nullptr){
-        UIElement* el = ptrStore[id].get();
+void UIManager::EditElementShape(int id, const GeometryStoreState& newShape, bool dirtyChain){
+    assert(id >= 0);
+    assert(id < ptrStore.size());
+    assert(ptrStore[id] != nullptr);
+    UIElement* el = ptrStore[id].get();
 
-        bool positionOrSizeChanged = (dataTables.localX[id] != props.x || dataTables.localY[id] != props.y ||
-                                    dataTables.widths[id] != props.width || dataTables.heights[id] != props.height);
+    GeometryStoreState& elementShape = dataTables.geometry[id];
 
-        dataTables.localX[id]  = props.x;
-        dataTables.localY[id]  = props.y;
-        dataTables.widths[id]  = props.width;
-        dataTables.heights[id] = props.height;
-        dataTables.r[id]       = props.r;
-        dataTables.g[id]       = props.g;
-        dataTables.b[id]       = props.b;
-        dataTables.a[id]       = props.a;
+    float oldAbsX = elementShape.absoluteX;
+    float oldAbsY = elementShape.absoluteY;
 
-        if (dirtyChain && positionOrSizeChanged) {
-            el->isDirty = true; // <--- Mark the edited element ITSELF dirty!
-            if (el->parentId != -1 && ptrStore[el->parentId]) {
-                ptrStore[el->parentId]->isDirty = true; // Mark parent dirty
-            }
+    bool positionOrSizeChanged = (elementShape != newShape);
+
+    if (!positionOrSizeChanged) return;
+
+    elementShape = newShape;
+    elementShape.absoluteX = oldAbsX; elementShape.absoluteY = oldAbsY;
+
+    if (dirtyChain) {
+        el->isDirty = true;
+        if (el->parentId != -1 && ptrStore[el->parentId]) {
+            ptrStore[el->parentId]->isDirty = true; // Mark parent dirty
         }
     }
 }
 
-ElementGeometry UIManager::GetElementProperties(int id) const {
-    if (id < 0 || id >= ptrStore.size() || ptrStore[id] == nullptr) {
-        return {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f}; 
-    }
+void UIManager::EditElementColor(int id, const Color& newColor, bool dirtyChain){
+    assert(id >= 0);
+    assert(id < ptrStore.size());
+    assert(ptrStore[id] != nullptr);
 
-    return {
-        dataTables.localX[id],
-        dataTables.localY[id],
-        dataTables.widths[id],
-        dataTables.heights[id],
-        dataTables.r[id],
-        dataTables.g[id],
-        dataTables.b[id],
-        dataTables.a[id]
-    };
+    UIElement* el = ptrStore[id].get();
+
+    Color& elementColor = dataTables.colors[id];
+
+    bool colorChanged = (elementColor != newColor);
+
+    if (!colorChanged) return;
+
+    elementColor = newColor;
+
+    if (dirtyChain && colorChanged) {
+        el->isDirty = true;
+        if (el->parentId != -1 && ptrStore[el->parentId]) {
+            ptrStore[el->parentId]->isDirty = true; // Mark parent dirty
+        }
+    }
+}
+
+const GeometryStoreState& UIManager::GetElementShape(int id) const
+{
+    assert(id >= 0);
+    assert(id < dataTables.geometry.size());
+
+    return dataTables.geometry[id];
+}
+
+const ConstraintStoreState& UIManager::GetElementConstraints(int id) const{
+    assert(id >= 0);
+    assert(id < dataTables.constraints.size());
+
+    return dataTables.constraints[id];
+}
+
+const Color& UIManager::GetElementColor(int id) const {
+    assert(id >= 0);
+    assert(id < dataTables.colors.size());
+
+    return dataTables.colors[id];
 }
 
 void UIManager::RebuildHierarchy(){
@@ -101,12 +128,6 @@ void UIManager::RebuildHierarchy(){
     // this old method used to search its own data to find the root
     // that felt kinda wrong so i think any dev using the framework should
     // be setting the root with a SetRoot function
-
-    // for (auto& ptr : ptrStore){
-    //     UIElement *element = ptr.get();
-    //     int elementparentId = element->parentId;
-    //     if(elementparentId == -1) rootId = element -> id;
-    // } 
 
     if (!ptrStore.empty() && ptrStore[rootId]){
         drawOrder.clear();
@@ -155,12 +176,12 @@ void UIManager::AddChild(int parentId, int childId) {
     parent->isDirty = true;
 }
 
-void UIElement::UpdateLayout(UIManager *uIManager) {
+void UIElement::UpdateLayout(UIStateTables& data) {
     isDirty = false;
 }
 
 ScreenLayoutMode UIManager::GetScreenLayoutMode() const{
-    if (dataTables.widths[rootId] < 600.0f) return ScreenLayoutMode::Mobile;
+    if (dataTables.geometry[rootId].width < 600.0f) return ScreenLayoutMode::Mobile;
     return ScreenLayoutMode::Desktop;
 }
 
@@ -175,10 +196,11 @@ void UIManager::StepFrame(std::array<float,2>& resolution){
     if (!ptrStore.empty() && ptrStore[rootId]) {
         float newWidth  = resolution[0];
         float newHeight = resolution[1];
+        GeometryStoreState& rootShape = dataTables.geometry[rootId];
 
-        if (dataTables.widths[rootId] != newWidth || dataTables.heights[rootId] != newHeight) {
-            dataTables.widths[rootId] = newWidth;
-            dataTables.heights[rootId] = newHeight;
+        if (rootShape.width != newWidth || rootShape.height != newHeight) {
+            rootShape.width = newWidth;
+            rootShape.height = newHeight;
             ptrStore[rootId]->isDirty = true; 
             geometryNeedsRebuild = true;
         }
@@ -188,24 +210,24 @@ void UIManager::StepFrame(std::array<float,2>& resolution){
 
     if (elementCount > 0){
         for (int elementId : drawOrder) {
-            // int elementId = drawOrder[i];
             if (!ptrStore[elementId]) continue;
-            // if (elementId == rootId) continue; //ignore the root
 
             float parentAbsX = 0.0f;
             float parentAbsY = 0.0f;
             int pId = ptrStore[elementId]->parentId;
+            GeometryStoreState& parentShape = dataTables.geometry[pId];
+            GeometryStoreState& elementShape = dataTables.geometry[elementId];
 
             if (pId != -1) {
-                parentAbsX = dataTables.absoluteX[pId];
-                parentAbsY = dataTables.absoluteY[pId];
-            } //just in case...
+                parentAbsX = parentShape.absoluteX;
+                parentAbsY = parentShape.absoluteY;
+            }
 
-            dataTables.absoluteX[elementId] = dataTables.localX[elementId] + parentAbsX;
-            dataTables.absoluteY[elementId] = dataTables.localY[elementId] + parentAbsY;
+            elementShape.absoluteX = elementShape.localX + parentAbsX;
+            elementShape.absoluteY = elementShape.localY + parentAbsY;
 
             if (ptrStore[elementId]->isDirty) {
-                ptrStore[elementId]->UpdateLayout(this);
+                ptrStore[elementId]->UpdateLayout(dataTables);
                 geometryNeedsRebuild = true;
             }
         }
@@ -273,7 +295,7 @@ void UIManager::StepFrame(std::array<float,2>& resolution){
             else if (op.type == RenderOpType::DrawElement){
                 UIElement* element = ptrStore[op.elementId].get();
                 if (element){
-                    GeometryView view = element->Draw(*this);
+                    GeometryView view = element->Draw(dataTables);
                     GLuint baseVertexOffset = static_cast<GLuint>(globalVertices.size());
 
                     globalVertices.insert(globalVertices.end(), view.verticesPtr, view.verticesPtr + view.vertexCount);
@@ -291,66 +313,56 @@ void UIManager::StepFrame(std::array<float,2>& resolution){
     }
 }
 
-Color UIManager::GetColor(int id) const {
-    if (id >= 0 && id < dataTables.r.size()) {
-        return { dataTables.r[id], dataTables.g[id], dataTables.b[id], dataTables.a[id] };
-    }
-    return { 1.0f, 1.0f, 1.0f, 1.0f };
-}
+GeometryView UIElement::Draw(const UIStateTables& dataTables){
+    GeometryStoreState elementShape = dataTables.geometry[id];
+    Color col = dataTables.colors[id];
 
-GeometryView UIElement::Draw(const UIManager& manager){
-    float cachedWidth = manager.GetWidth(this->id);
-    float cachedHeight = manager.GetHeight(this->id);
+    float absX = elementShape.absoluteX; float absY = elementShape.absoluteY;
+    float width = elementShape.width; float height = elementShape.height;
 
-    float absX = manager.GetAbsoluteX(this->id);
-    float absY = manager.GetAbsoluteY(this->id);
-
-    Color col = manager.GetColor(this->id);
-
-    drawRect.localVertices[0] = {{absX,               absY,                0.0f},{col.r,col.g,col.b,col.a}};
-    drawRect.localVertices[1] = {{absX + cachedWidth, absY,                0.0f},{col.r,col.g,col.b,col.a}};
-    drawRect.localVertices[2] = {{absX + cachedWidth, absY + cachedHeight, 0.0f},{col.r,col.g,col.b,col.a}};
-    drawRect.localVertices[3] = {{absX,               absY + cachedHeight, 0.0f},{col.r,col.g,col.b,col.a}};
+    drawRect.localVertices[0] = {{absX,         absY,         0.0f},{col.r,col.g,col.b,col.a}};
+    drawRect.localVertices[1] = {{absX + width, absY,         0.0f},{col.r,col.g,col.b,col.a}};
+    drawRect.localVertices[2] = {{absX + width, absY + width, 0.0f},{col.r,col.g,col.b,col.a}};
+    drawRect.localVertices[3] = {{absX,         absY + width, 0.0f},{col.r,col.g,col.b,col.a}};
 
     return { drawRect.localVertices.data(), drawRect.localVertices.size(), drawRect.localIndices.data(), drawRect.localIndices.size() };
 }
 
-GeometryView AnchorElement::Draw(const UIManager& manager) {
-    float absX = manager.GetAbsoluteX(this->id);
-    float absY = manager.GetAbsoluteY(this->id);
-
+GeometryView AnchorElement::Draw(const UIStateTables& dataTables) {
     return { nullptr, 0, nullptr, 0 };
 }
 
-void VerticalContainer::UpdateLayout(UIManager* uIManager){
+void VerticalContainer::UpdateLayout(UIStateTables& data){
     if (childIds.empty()) {
         isDirty = false;
         return;
     }
-    float selfY = uIManager->GetAbsoluteY(this->id);
+
+    GeometryStoreState& myData = data.geometry[id];
+
     float targetX = 0, targetY = padding;
     float childLargestWidth = 0.0f;
-    ElementGeometry childData;
-    
-    ElementGeometry myData = uIManager->GetElementProperties(this->id);
 
     for (int childId : childIds){
-        childData = uIManager->GetElementProperties(childId);
+        GeometryStoreState& childData = data.geometry[childId];
+        ConstraintStoreState& childConstraints = data.constraints[childId];
         if (resizeChildren){
             float bigger = std::max(childData.width, childData.height);
-            childData.width = childData.height = bigger;
-            uIManager->EditElement(childId, childData, false);
+            auto size = ApplyConstraints(bigger, bigger, myData.width, myData.height, childConstraints);
+            childData.width = size[0];
+            childData.height = size[1];
         }
         childLargestWidth = std::max(childLargestWidth, childData.width);
     }
 
     if (fitContentWidth){
-        myData.width = childLargestWidth + 2 * padding;
+        float fitWidth = childLargestWidth + 2 * padding;
+        myData.width = std::max(myData.width, fitWidth);
         uIManager->EditElement(this->id, myData, false);
     }
 
     for (int childId : childIds){
-        childData = uIManager->GetElementProperties(childId);
+        GeometryStoreState& childData = data.geometry[childId];
         if(centerHorizontally){
             targetX = (myData.width - childData.width) * 0.5f;
         } else{
